@@ -1,0 +1,58 @@
+name: PRODUCTION - Deploy via FTPS
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: {}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      
+      - name: Create .env from GitHub Secrets
+        run: |
+          cat > .env <<EOF
+          NEXT_PUBLIC_VISIT_API_URL=${{ secrets.NEXT_PUBLIC_VISIT_API_URL }}
+          NEXT_PUBLIC_VISIT_API_TOKEN=${{ secrets.NEXT_PUBLIC_VISIT_API_TOKEN }}
+          EOF
+      
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build static site
+        run: pnpm build
+
+      - name: Deploy via FTPS
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: ${{ secrets.FTPS_SERVER }}
+          username: ${{ secrets.FTPS_USERNAME }}
+          password: ${{ secrets.FTPS_PASSWORD }}
+          protocol: ftps
+          local-dir: ./webapp/
+          server-dir: /
+          dangerous-clean-slate: false
+          log-level: standard
+          exclude: |
+            **/.well-known/**
+            **/backend/**
+            **/.ftp-deploy-sync-state.json
+            **/.ftpquota
+            **/.htaccess
